@@ -1,0 +1,6 @@
+langgraph
+langchain
+langchain-anthropic
+typing-extensions
+ipython
+Pillow  # This is the modern PIL implementation
