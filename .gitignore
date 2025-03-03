@@ -1,7 +1,10 @@
+# Environment variables
+.env
+*.env
+
 # Python virtual environment
 venv/
 env/
-.env/
 .venv/
 
 # VS Code

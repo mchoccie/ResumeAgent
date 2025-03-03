@@ -4,3 +4,5 @@ langchain-anthropic
 typing-extensions
 ipython
 Pillow  # This is the modern PIL implementation
+python-dotenv
+tavily-python
