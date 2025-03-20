@@ -40,7 +40,7 @@ llm = ChatAnthropic(model="claude-3-haiku-20240307")  # Changed from sonnet to h
 llm_with_tools = llm.bind_tools(tools)
 
 class researchChannelDecider:
-    def __init__(self, llm, tools):
+    def __init__(self, llm):
         self.llm = llm
 
     def __call__(self, state: State):
@@ -56,7 +56,8 @@ class researchChannelDecider:
 
 
 graph_builder = StateGraph(State)
+graph_builder.add_node("tools", tool_node)
+graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_with_tools))
 
-graph_builder = StateGraph(State)
 
 
