@@ -3,11 +3,13 @@ venv/
 env/
 .env/
 .venv/
+.env
 
 # VS Code
 .vscode/
 *.code-workspace
 .settings/
+.composio.lock
 
 # Python
 __pycache__/

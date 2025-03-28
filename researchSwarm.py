@@ -3,6 +3,7 @@ from IPython.display import Image, display
 from PIL import Image as PILImage
 import io
 from typing import Annotated
+import os
 import json
 
 from langchain_core.messages import ToolMessage
@@ -17,13 +18,18 @@ from langgraph.types import Command, interrupt
 
 from langgraph.prebuilt import ToolNode, tools_condition
 from composio_langgraph import Action, ComposioToolSet, App
+from dotenv import load_dotenv
+load_dotenv()
+os.environ["COMPOSIO_API_KEY"] = os.getenv("COMPOSIO_API_KEY")
+print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
-api_key_composio = '1d36235a-b44a-49e6-8a96-4f0a0d4e46f0'
 composio_toolset = ComposioToolSet()
 
 tools = composio_toolset.get_tools(
     apps=[App.GITHUB]
 )
+
+
 
 tool_node = ToolNode(tools)
 class State(TypedDict):
@@ -46,7 +52,7 @@ class researchChannelDecider:
     def __call__(self, state: State):
         input_text = state.get("query", "")
         response = self.llm.invoke(input_text)
-        state["response"] = response
+        state["messages"] = response
         return state
         
 
@@ -58,6 +64,27 @@ class researchChannelDecider:
 graph_builder = StateGraph(State)
 graph_builder.add_node("tools", tool_node)
 graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_with_tools))
+graph = graph_builder.compile()
+
+def stream_graph_updates(user_input: str):
+    for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
+        for value in event.values():
+            print("Assistant:", value["messages"][-1].content)
+
+while True:
+    try:
+        user_input = input("User: ")
+        if user_input.lower() in ["quit", "exit", "q"]:
+            print("Goodbye!")
+            break
+
+        stream_graph_updates(user_input)
+    except:
+        # fallback if input() is not available
+        user_input = "What do you know about LangGraph?"
+        print("User: " + user_input)
+        stream_graph_updates(user_input)
+        break
 
 
 
