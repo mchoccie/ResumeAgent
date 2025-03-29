@@ -24,9 +24,9 @@ os.environ["COMPOSIO_API_KEY"] = os.getenv("COMPOSIO_API_KEY")
 print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
 composio_toolset = ComposioToolSet()
-
+# Need to figure out how integration with tools can work
 tools = composio_toolset.get_tools(
-    apps=[App.GITHUB]
+    apps=[App.GITHUB, App.YOUTUBE]
 )
 
 
@@ -52,7 +52,7 @@ class researchChannelDecider:
     def __call__(self, state: State):
         input_text = state.get("query", "")
         response = self.llm.invoke(input_text)
-        state["messages"] = response
+        state["messages"].append(response)
         return state
         
 
@@ -62,18 +62,25 @@ class researchChannelDecider:
 
 
 graph_builder = StateGraph(State)
+
 graph_builder.add_node("tools", tool_node)
 graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_with_tools))
+graph_builder.add_edge(START, "researchChannelDecider")
+graph_builder.add_edge("researchChannelDecider", END)
 graph = graph_builder.compile()
 
 def stream_graph_updates(user_input: str):
-    for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
+    print("User:",
+          user_input)
+    for event in graph.stream({"query": user_input, "messages": [{"role": "user", "content": user_input}]}):
         for value in event.values():
+            print(value)
             print("Assistant:", value["messages"][-1].content)
 
 while True:
     try:
         user_input = input("User: ")
+        print(user_input)
         if user_input.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
             break
