@@ -7,12 +7,15 @@ import os
 import json
 
 from langchain_core.messages import ToolMessage
-
+import operator
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
+from langchain_core.messages import AnyMessage
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langgraph.types import Command, interrupt
 
@@ -24,10 +27,13 @@ os.environ["COMPOSIO_API_KEY"] = os.getenv("COMPOSIO_API_KEY")
 print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
 composio_toolset = ComposioToolSet()
-# Need to figure out how integration with tools can work
+# Try to use your own tools fuck composio too much work
 tools = composio_toolset.get_tools(
-    apps=[App.GITHUB, App.YOUTUBE]
+    apps=[App.GITHUB, App.YOUTUBE],
+
 )
+
+
 
 
 
@@ -40,7 +46,19 @@ class State(TypedDict):
     medium: str
     raw: list
     summary: str
-    messages: Annotated[list, add_messages]
+    messages: Annotated[list[AnyMessage], operator.add]
+
+
+def route_tools(state: State) -> str:
+    """Route to the appropriate tool based on the last message type."""
+    print(state.get("messages")[-1].content)
+    # for val in state.get("messages")[-1].content:
+    #     if 'id' in val:
+    #         if val['id'].startswith("tool"):
+    #             return "tools"
+    return None
+
+    
 
 llm = ChatAnthropic(model="claude-3-haiku-20240307")  # Changed from sonnet to haiku
 llm_with_tools = llm.bind_tools(tools)
@@ -51,7 +69,20 @@ class researchChannelDecider:
 
     def __call__(self, state: State):
         input_text = state.get("query", "")
-        response = self.llm.invoke(input_text)
+        sys_msg = SystemMessage(content="""\
+You are a helpful assistant tasked with determining which research channels are best suited to a user's query. 
+You should return a structured output in the following format:
+
+{
+  "recommended_channels": [list of recommended channels like "Podcast", "YouTube", "Research Papers", "Blogs"],
+  "reasoning": "Brief explanation of why these channels are appropriate",
+  "summary": "Optional: a short summary or recommendation for the user"
+}
+
+Be thoughtful, concise, and provide recommendations tailored to the topic.
+""")
+        state["messages"].append(HumanMessage(content=input_text))
+        response = self.llm.invoke([sys_msg] + [HumanMessage(content=input_text)])
         state["messages"].append(response)
         return state
         
@@ -67,20 +98,30 @@ graph_builder.add_node("tools", tool_node)
 graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_with_tools))
 graph_builder.add_edge(START, "researchChannelDecider")
 graph_builder.add_edge("researchChannelDecider", END)
-graph = graph_builder.compile()
 
+graph_builder.add_conditional_edges(
+    "researchChannelDecider",
+    route_tools,
+    {"tools": "tools"},
+)
+
+graph_builder.add_edge("tools", "researchChannelDecider")
+graph = graph_builder.compile()
+try:
+    img_data = graph.get_graph().draw_mermaid_png()
+    img = PILImage.open(io.BytesIO(img_data))
+    img.show()  # Opens the image in the default viewer
+except Exception:
+    # This requires some extra dependencies and is optional
+    pass
 def stream_graph_updates(user_input: str):
-    print("User:",
-          user_input)
     for event in graph.stream({"query": user_input, "messages": [{"role": "user", "content": user_input}]}):
         for value in event.values():
-            print(value)
             print("Assistant:", value["messages"][-1].content)
 
 while True:
     try:
         user_input = input("User: ")
-        print(user_input)
         if user_input.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
             break
