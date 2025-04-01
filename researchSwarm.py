@@ -27,7 +27,7 @@ os.environ["COMPOSIO_API_KEY"] = os.getenv("COMPOSIO_API_KEY")
 print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
 composio_toolset = ComposioToolSet()
-# Try to use your own tools fuck composio too much work
+# Try to use your own tools fuck composio too much work. Tools are easier
 tools = composio_toolset.get_tools(
     apps=[App.GITHUB, App.YOUTUBE],
 
