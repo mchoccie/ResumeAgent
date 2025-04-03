@@ -5,6 +5,7 @@ import io
 from typing import Annotated
 import os
 import json
+import arxiv
 
 from langchain_core.messages import ToolMessage
 import operator
@@ -28,10 +29,21 @@ print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
 composio_toolset = ComposioToolSet()
 # Try to use your own tools fuck composio too much work. Tools are easier
-tools = composio_toolset.get_tools(
-    apps=[App.GITHUB, App.YOUTUBE],
-
+@tool
+def retrievePapers(query) -> int:
+    """
+    Returns retrieved papers
+    """
+    client = arxiv.Client()
+    search = arxiv.Search(
+    query = query,
+    max_results = 10,
+    sort_by = arxiv.SortCriterion.SubmittedDate
 )
+    results = client.results(search)
+    for r in results:
+        print(r.title)
+tools = [retrievePapers]
 
 
 
@@ -51,12 +63,13 @@ class State(TypedDict):
 
 def route_tools(state: State) -> str:
     """Route to the appropriate tool based on the last message type."""
-    print(state.get("messages")[-1].content)
+    print("-----------------This is the route_tools function-----------------")
+    print(state.get("messages")[-1])
     # for val in state.get("messages")[-1].content:
     #     if 'id' in val:
     #         if val['id'].startswith("tool"):
     #             return "tools"
-    return None
+    return "END"
 
     
 
@@ -69,18 +82,19 @@ class researchChannelDecider:
 
     def __call__(self, state: State):
         input_text = state.get("query", "")
-        sys_msg = SystemMessage(content="""\
-You are a helpful assistant tasked with determining which research channels are best suited to a user's query. 
-You should return a structured output in the following format:
+#         sys_msg = SystemMessage(content="""\
+# You are a helpful assistant tasked with determining which research channels are best suited to a user's query. 
+# You should return a structured output in the following format:
 
-{
-  "recommended_channels": [list of recommended channels like "Podcast", "YouTube", "Research Papers", "Blogs"],
-  "reasoning": "Brief explanation of why these channels are appropriate",
-  "summary": "Optional: a short summary or recommendation for the user"
-}
+# {
+#   "recommended_channels": [list of recommended channels like "Podcast", "YouTube", "Research Papers", "Blogs"],
+#   "reasoning": "Brief explanation of why these channels are appropriate",
+#   "summary": "Optional: a short summary or recommendation for the user"
+# }
 
-Be thoughtful, concise, and provide recommendations tailored to the topic.
-""")
+# Be thoughtful, concise, and provide recommendations tailored to the topic. You only have these options: Web Search, Podcast, Youtube, Research Papers, Blogs.
+# """)
+        sys_msg = "You are a helpful assistant. You need to determine if we need to route to a tool or not. If we do, return 'tools'. If not, return 'END'."
         state["messages"].append(HumanMessage(content=input_text))
         response = self.llm.invoke([sys_msg] + [HumanMessage(content=input_text)])
         state["messages"].append(response)
@@ -101,8 +115,8 @@ graph_builder.add_edge("researchChannelDecider", END)
 
 graph_builder.add_conditional_edges(
     "researchChannelDecider",
-    route_tools,
-    {"tools": "tools"},
+    tools_condition,
+    {"tools": "tools", "END": END},
 )
 
 graph_builder.add_edge("tools", "researchChannelDecider")
