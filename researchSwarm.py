@@ -50,6 +50,7 @@ tools = [retrievePapers]
 
 class ChannelRecommendation(BaseModel):
     recommended_channels: List[str]
+    query_terms: str
 
 
 
@@ -85,7 +86,7 @@ class researchChannelDecider:
 
     def __call__(self, state: State):
         input_text = state.get("query", "")
-        sys_msg = "You are a helpful assistant. You need to determine what research mediums are appropriate for the query. You have three options: Research Paper, Youtube Video, Online Articles. Decide which ones are most appropriate to learn about the topic in question. Only return as many as you need to. Returning one is fine too. But you make this decision."
+        sys_msg = "You are a helpful assistant. You need to determine what research mediums are appropriate for the query. You have three options: Research Paper, Youtube Video, Online Articles. Decide which ones are most appropriate to learn about the topic in question. Only return as many as you need to. Returning one is fine too. But you make this decision. Also return the important query terms to the next node to process. Extract all meaningful information"
         state["messages"].append(HumanMessage(content=input_text))
         response = self.llm.invoke([sys_msg] + [HumanMessage(content=input_text)])
         state["messages"].append(response)
@@ -129,6 +130,8 @@ graph_builder = StateGraph(State)
 graph_builder.add_node("tools", tool_node)
 graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_final))
 graph_builder.add_node("Research Paper", researchPaper(llm_final))
+graph_builder.add_node("Youtube Video", youtubeVideo(llm_final))
+graph_builder.add_node("Online Articles", OnlineScrape(llm_final))
 graph_builder.add_edge(START, "researchChannelDecider")
 graph_builder.add_edge("researchChannelDecider", END)
 channels = ["Research Paper", "Youtube Video", "Online Articles"]
