@@ -6,7 +6,8 @@ from typing import Annotated
 import os
 import json
 import arxiv
-
+from typing import List
+from pydantic import BaseModel
 from langchain_core.messages import ToolMessage
 import operator
 from langgraph.graph import StateGraph, START, END
@@ -15,6 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import AnyMessage
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -25,6 +27,7 @@ from composio_langgraph import Action, ComposioToolSet, App
 from dotenv import load_dotenv
 load_dotenv()
 os.environ["COMPOSIO_API_KEY"] = os.getenv("COMPOSIO_API_KEY")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 print("COMPOSIO_API_KEY:", os.environ["COMPOSIO_API_KEY"])
 
 composio_toolset = ComposioToolSet()
@@ -45,7 +48,8 @@ def retrievePapers(query) -> int:
         print(r.title)
 tools = [retrievePapers]
 
-
+class ChannelRecommendation(BaseModel):
+    recommended_channels: List[str]
 
 
 
@@ -65,16 +69,15 @@ def route_tools(state: State) -> str:
     """Route to the appropriate tool based on the last message type."""
     print("-----------------This is the route_tools function-----------------")
     print(state.get("messages")[-1])
-    # for val in state.get("messages")[-1].content:
-    #     if 'id' in val:
-    #         if val['id'].startswith("tool"):
-    #             return "tools"
-    return "END"
+    res = state.get("messages")[-1]
+    return res
 
     
 
-llm = ChatAnthropic(model="claude-3-haiku-20240307")  # Changed from sonnet to haiku
+#llm = ChatAnthropic(model="claude-3-haiku-20240307")  # Changed from sonnet to haiku
+llm = ChatOpenAI(model="gpt-4", temperature=0)
 llm_with_tools = llm.bind_tools(tools)
+llm_final = llm.with_structured_output(ChannelRecommendation)
 
 class researchChannelDecider:
     def __init__(self, llm):
@@ -82,23 +85,31 @@ class researchChannelDecider:
 
     def __call__(self, state: State):
         input_text = state.get("query", "")
-#         sys_msg = SystemMessage(content="""\
-# You are a helpful assistant tasked with determining which research channels are best suited to a user's query. 
-# You should return a structured output in the following format:
-
-# {
-#   "recommended_channels": [list of recommended channels like "Podcast", "YouTube", "Research Papers", "Blogs"],
-#   "reasoning": "Brief explanation of why these channels are appropriate",
-#   "summary": "Optional: a short summary or recommendation for the user"
-# }
-
-# Be thoughtful, concise, and provide recommendations tailored to the topic. You only have these options: Web Search, Podcast, Youtube, Research Papers, Blogs.
-# """)
-        sys_msg = "You are a helpful assistant. You need to determine if we need to route to a tool or not. If we do, return 'tools'. If not, return 'END'."
+        sys_msg = "You are a helpful assistant. You need to determine what research mediums are appropriate for the query. You have three options: Research Paper, Youtube Video, Online Articles. Decide which ones are most appropriate to learn about the topic in question. Only return as many as you need to. Returning one is fine too. But you make this decision."
         state["messages"].append(HumanMessage(content=input_text))
         response = self.llm.invoke([sys_msg] + [HumanMessage(content=input_text)])
         state["messages"].append(response)
         return state
+    
+class researchPaper:
+    def __init__(self, llm):
+        self.llm = llm
+
+    def __call__(self, state: State):
+        print("-----------------This is the researchPaper function-----------------")
+        '''
+        TODO: Implement this function to retrieve research papers based on the query.
+        '''
+
+class youtubeVideo:
+    def __init__(self, llm):
+        self.llm = llm
+    def __call__(self, state: State):
+        print("-----------------This is the youtube function-----------------")
+        '''
+        TODO: Implement this function to retrieve research papers based on the query.
+        '''
+
         
 
     
@@ -109,14 +120,19 @@ class researchChannelDecider:
 graph_builder = StateGraph(State)
 
 graph_builder.add_node("tools", tool_node)
-graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_with_tools))
+graph_builder.add_node("researchChannelDecider", researchChannelDecider(llm_final))
+graph_builder.add_node("Research Paper", researchPaper(llm_final))
 graph_builder.add_edge(START, "researchChannelDecider")
 graph_builder.add_edge("researchChannelDecider", END)
+channels = ["Research Paper", "Youtube Video", "Online Articles"]
+for node in channels:
+    
+    graph_builder.add_edge(node, END)
 
 graph_builder.add_conditional_edges(
     "researchChannelDecider",
-    tools_condition,
-    {"tools": "tools", "END": END},
+    route_tools,
+    channels,
 )
 
 graph_builder.add_edge("tools", "researchChannelDecider")
