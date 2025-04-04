@@ -107,9 +107,16 @@ class youtubeVideo:
     def __call__(self, state: State):
         print("-----------------This is the youtube function-----------------")
         '''
-        TODO: Implement this function to retrieve research papers based on the query.
+        TODO: Implement this function to retrieve youtube videos based on the query.
         '''
-
+class OnlineScrape:
+    def __init__(self, llm):
+        self.llm = llm
+    def __call__(self, state: State):
+        print("-----------------This is the online channel function-----------------")
+        '''
+        TODO: Implement this function to retrieve information on websites based on the query.
+        '''
         
 
     
