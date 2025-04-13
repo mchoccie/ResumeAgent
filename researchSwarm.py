@@ -2,6 +2,7 @@ from typing_extensions import TypedDict
 from IPython.display import Image, display
 from PIL import Image as PILImage
 import io
+from enum import Enum
 from typing import Annotated
 import os
 import json
@@ -53,6 +54,12 @@ class ChannelRecommendation(BaseModel):
     query_terms: str
 
 
+class Medium(str, Enum):
+    RESEARCH_PAPER = "Research Paper"
+    YOUTUBE_VIDEO = "Youtube Video"
+    ONLINE_ARTICLES = "Online Articles"
+
+
 
 tool_node = ToolNode(tools)
 class State(TypedDict):
@@ -63,6 +70,8 @@ class State(TypedDict):
     medium: str
     raw: list
     summary: str
+    recommended_channels: List[Medium] = []
+    query_terms: str = ""
     messages: Annotated[list[AnyMessage], operator.add]
 
 
@@ -71,7 +80,15 @@ def route_tools(state: State) -> str:
     print("-----------------This is the route_tools function-----------------")
     print(state.get("messages")[-1])
     res = state.get("messages")[-1]
-    return res
+    print("This is the response", res.recommended_channels)
+    if "Research Paper" in res.recommended_channels:
+        return "Research Paper"
+    elif "Youtube Video" in res.recommended_channels:
+        return "Youtube Video"
+    elif "Online Articles" in res.recommended_channels:
+        return "Online Articles"
+    else:
+        return state
 
     
 
@@ -102,6 +119,8 @@ class researchPaper:
         TODO: Implement this function to retrieve research papers based on the query.
         '''
 
+        return state
+
 class youtubeVideo:
     def __init__(self, llm):
         self.llm = llm
@@ -110,6 +129,10 @@ class youtubeVideo:
         '''
         TODO: Implement this function to retrieve youtube videos based on the query.
         '''
+
+        return state
+
+        return END
 class OnlineScrape:
     def __init__(self, llm):
         self.llm = llm
@@ -118,7 +141,7 @@ class OnlineScrape:
         '''
         TODO: Implement this function to retrieve information on websites based on the query.
         '''
-        
+        return state
 
     
         
@@ -157,7 +180,7 @@ except Exception:
 def stream_graph_updates(user_input: str):
     for event in graph.stream({"query": user_input, "messages": [{"role": "user", "content": user_input}]}):
         for value in event.values():
-            print("Assistant:", value["messages"][-1].content)
+            print("Assistant:", value["messages"][-1])
 
 while True:
     try:
